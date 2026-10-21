@@ -7,6 +7,7 @@
 #include "pico/time.h"
 
 #include "descriptor_parser.h"
+#include "diag_log.h"
 #include "out_report.h"
 #include "remapper.h"
 #include "tick.h"
@@ -25,6 +26,7 @@ void extra_init() {
     pio_cfg.skip_alarm_pool = true;
     printf("[USB-DIAG] PIO host rhport=%u D+ GPIO=%u\r\n",
            (unsigned) BOARD_TUH_RHPORT, (unsigned) pio_cfg.pin_dp);
+    feather_diag_printf("[USB-DIAG] PIO configuration D+=GPIO%u\r\n", (unsigned) pio_cfg.pin_dp);
     tuh_configure(BOARD_TUH_RHPORT, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
     add_repeating_timer_us(-1000, manual_sof, NULL, &sof_timer);
 }

@@ -1,5 +1,6 @@
 #include <cstring>
 
+#include "diag_log.h"
 #include "globals.h"
 #include "our_descriptor.h"
 #include "ps_auth.h"
@@ -716,6 +717,15 @@ const uint8_t config_report_descriptor[] = {
     0x75, 0x08,               //   Report Size (8)
     0x95, 0x3F,               //   Report Count (63)
     0x81, 0x02,               //   Input (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position)
+    0xC0,                     // End Collection
+    // Temporary read-only diagnostics (separate vendor-defined top-level collection).
+    0x09, 0x22,               // Usage (0x22)
+    0xA1, 0x01,               // Collection (Application)
+    0x09, 0x22,               //   Usage (0x22)
+    0x85, REPORT_ID_DIAGNOSTICS,
+    0x75, 0x08,               //   Report Size (8)
+    0x95, 0x3F,               //   Report Count (63)
+    0xB1, 0x02,               //   Feature (Data,Var,Abs)
     0xC0,                     // End Collection
 };
 

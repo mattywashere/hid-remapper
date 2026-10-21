@@ -21,6 +21,7 @@
 #include "config.h"
 #include "crc.h"
 #include "descriptor_parser.h"
+#include "diag_log.h"
 #include "globals.h"
 #include "i2c.h"
 #include "mcp4651.h"
@@ -254,6 +255,7 @@ int main() {
     board_init();
     // Configure UART before the PIO USB host begins enumeration.
     stdio_init_all();
+    feather_diag_printf("[USB-DIAG] Boot: HID log buffer ready\r\n");
     printf("\r\n[USB-DIAG] Boot: UART ready (921600 8N1)\r\n");
     extra_init();
     printf("[USB-DIAG] PIO USB configured; initializing TinyUSB\r\n");

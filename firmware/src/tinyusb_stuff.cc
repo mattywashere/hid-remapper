@@ -27,6 +27,7 @@
 #include <tusb.h>
 
 #include "config.h"
+#include "diag_log.h"
 #include "globals.h"
 #include "our_descriptor.h"
 #include "platform.h"
@@ -196,6 +197,9 @@ uint16_t const* tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
 }
 
 uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type, uint8_t* buffer, uint16_t reqlen) {
+    if ((itf == 1) && (report_id == REPORT_ID_DIAGNOSTICS) && (report_type == HID_REPORT_TYPE_FEATURE)) {
+        return feather_diag_read(buffer, reqlen);
+    }
     if (itf == 0) {
         return handle_get_report0(report_id, buffer, reqlen);
     } else {
@@ -204,6 +208,9 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
 }
 
 void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type, uint8_t const* buffer, uint16_t bufsize) {
+    if ((itf == 1) && (report_id == REPORT_ID_DIAGNOSTICS)) {
+        return;
+    }
     if (itf == 0) {
         if ((report_id == 0) && (report_type == 0) && (bufsize > 0)) {
             report_id = buffer[0];
