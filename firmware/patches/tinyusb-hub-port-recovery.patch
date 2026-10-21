@@ -1,0 +1,110 @@
+diff --git a/src/host/usbh.c b/src/host/usbh.c
+index 006115c..e964987 100644
+--- a/src/host/usbh.c
++++ b/src/host/usbh.c
+@@ -231,6 +231,11 @@ static uint8_t _usbh_controller = TUSB_INDEX_INVALID_8;
+ // Device with address = 0 for enumeration
+ static usbh_dev0_t _dev0;
+ 
++#if CFG_TUH_HUB
++// Only one address-zero enumeration is active at a time.
++static uint8_t _hub_port_reset_retries;
++#endif
++
+ // all devices excluding zero-address
+ // hub address start from CFG_TUH_DEVICE_MAX+1
+ // TODO: hub can has its own simpler struct to save memory
+@@ -1297,6 +1302,8 @@ enum {
+   ENUM_RESET_DELAY = 50, // USB specs: 10 to 50ms
+   ENUM_CONTACT_DEBOUNCING_DELAY = 450, // when plug/unplug a device, physical connection can be bouncing and may
+                                        // generate a series of attach/detach event. This delay wait for stable connection
++  ENUM_HUB_PORT_RESET_RETRIES = 2,  // additional resets after the hub driver's initial reset
++  ENUM_HUB_RESET_STATUS_DELAY = 100,
+ };
+ 
+ enum {
+@@ -1304,6 +1311,7 @@ enum {
+   ENUM_RESET_1,         // 1st reset when attached
+   //ENUM_HUB_GET_STATUS_1,
+   ENUM_HUB_CLEAR_RESET_1,
++  ENUM_HUB_RETRY_PORT_RESET,
+   ENUM_ADDR0_DEVICE_DESC,
+   ENUM_RESET_2,         // 2nd reset before set address (not used)
+   ENUM_HUB_GET_STATUS_2,
+@@ -1365,21 +1373,60 @@ static void process_enumeration(tuh_xfer_t* xfer) {
+         return;
+       }
+ 
++      TU_LOG_USBH("HUB port status: hub=%u port=%u status=0x%04x change=0x%04x reset_retries=%u\r\n",
++                   _dev0.hub_addr, _dev0.hub_port, port_status.status.value,
++                   port_status.change.value, _hub_port_reset_retries);
++
++      // A connected port is not necessarily enabled. Enumerating address zero before
++      // the hub enables the port repeatedly fails on some full-speed hub chains.
++      if (!port_status.status.port_enable) {
++        if (_hub_port_reset_retries >= ENUM_HUB_PORT_RESET_RETRIES) {
++          TU_LOG1("HUB port %u on hub %u never enabled; aborting enumeration\r\n",
++                  _dev0.hub_port, _dev0.hub_addr);
++          enum_full_complete();
++          break;
++        }
++
++        _hub_port_reset_retries++;
++        TU_LOG1("HUB port disabled after reset: retry %u/%u\r\n",
++                _hub_port_reset_retries, ENUM_HUB_PORT_RESET_RETRIES);
++
++        // Acknowledge the previous reset before issuing the next one. The hub
++        // control transfers are asynchronous; do not start two simultaneously.
++        if (port_status.change.reset) {
++          TU_ASSERT(hub_port_clear_reset_change(_dev0.hub_addr, _dev0.hub_port,
++                                                process_enumeration, ENUM_HUB_RETRY_PORT_RESET),);
++        } else {
++          TU_ASSERT(hub_port_reset(_dev0.hub_addr, _dev0.hub_port,
++                                   process_enumeration, ENUM_HUB_GET_STATUS_2),);
++        }
++        break;
++      }
++
+       _dev0.speed = (port_status.status.high_speed) ? TUSB_SPEED_HIGH :
+                     (port_status.status.low_speed) ? TUSB_SPEED_LOW : TUSB_SPEED_FULL;
+ 
+-      // Acknowledge Port Reset Change
++      // Only request the address-zero descriptor after a successful port enable.
++      // A missing reset-change flag is unexpected; fail safely instead of hanging.
+       if (port_status.change.reset) {
+-        hub_port_clear_reset_change(_dev0.hub_addr, _dev0.hub_port,
+-                                    process_enumeration, ENUM_ADDR0_DEVICE_DESC);
++        TU_ASSERT(hub_port_clear_reset_change(_dev0.hub_addr, _dev0.hub_port,
++                                              process_enumeration, ENUM_ADDR0_DEVICE_DESC),);
++      } else {
++        TU_LOG1("HUB port enabled without reset-change; aborting enumeration\r\n");
++        enum_full_complete();
+       }
+       break;
+     }
+ 
++    case ENUM_HUB_RETRY_PORT_RESET:
++      TU_ASSERT(hub_port_reset(_dev0.hub_addr, _dev0.hub_port,
++                               process_enumeration, ENUM_HUB_GET_STATUS_2),);
++      break;
++
+     case ENUM_HUB_GET_STATUS_2:
+-      osal_task_delay(ENUM_RESET_DELAY);
++      osal_task_delay(ENUM_HUB_RESET_STATUS_DELAY);
+       TU_ASSERT(hub_port_get_status(_dev0.hub_addr, _dev0.hub_port, _usbh_ctrl_buf,
+-                                    process_enumeration, ENUM_HUB_CLEAR_RESET_2),);
++                                    process_enumeration, ENUM_HUB_CLEAR_RESET_1),);
+       break;
+ 
+     case ENUM_HUB_CLEAR_RESET_2: {
+@@ -1532,6 +1579,10 @@ static bool enum_new_device(hcd_event_t* event) {
+   _dev0.hub_addr = event->connection.hub_addr;
+   _dev0.hub_port = event->connection.hub_port;
+ 
++#if CFG_TUH_HUB
++  _hub_port_reset_retries = 0;
++#endif
++
+   if (_dev0.hub_addr == 0) {
+     // connected/disconnected directly with roothub
+     hcd_port_reset(_dev0.rhport);

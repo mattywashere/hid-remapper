@@ -38,6 +38,11 @@ jobs:
             ninja-build \
             srecord
 
+      - name: Apply TinyUSB hub port reset recovery
+        run: |
+          git -C firmware/tinyusb -c core.autocrlf=true apply --check "$GITHUB_WORKSPACE/firmware/patches/tinyusb-hub-port-recovery.patch"
+          git -C firmware/tinyusb -c core.autocrlf=true apply "$GITHUB_WORKSPACE/firmware/patches/tinyusb-hub-port-recovery.patch"
+
       - name: Configure Feather RP2040 USB Host
         run: cmake -S firmware -B firmware/build-feather -G Ninja -DPICO_BOARD=feather_host
 
