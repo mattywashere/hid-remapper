@@ -49,7 +49,9 @@ void read_report(bool* new_report, bool* tick) {
     *tick = get_and_clear_tick_pending();
 
     reports_received = false;
+    feather_diag_capture_host(true);
     tuh_task();
+    feather_diag_capture_host(false);
     *new_report = reports_received;
 }
 
@@ -74,6 +76,9 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
     uint16_t vid;
     uint16_t pid;
     tuh_vid_pid_get(dev_addr, &vid, &pid);
+    feather_diag_printf("[USB-DIAG] HID mounted addr=%u hub=%u port=%u vid=%04x pid=%04x\r\n",
+                        (unsigned) dev_addr, (unsigned) hub_addr, (unsigned) hub_port,
+                        (unsigned) vid, (unsigned) pid);
     printf("[USB-DIAG] HID mount addr=%u instance=%u parent_hub=%u port=%u vid=%04x pid=%04x descriptor_len=%u\r\n",
            (unsigned) dev_addr, (unsigned) instance, (unsigned) hub_addr,
            (unsigned) hub_port, (unsigned) vid, (unsigned) pid, (unsigned) desc_len);

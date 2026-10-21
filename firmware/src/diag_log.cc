@@ -14,9 +14,18 @@ constexpr uint8_t REPORT_DATA_SIZE = 61;
 char log_bytes[LOG_CAPACITY];
 uint32_t write_pos = 0;
 uint32_t read_pos = 0;
+volatile bool capture_host_logs = false;
+}
+
+extern "C" void feather_diag_capture_host(bool enable) {
+    capture_host_logs = enable;
 }
 
 extern "C" int feather_diag_printf(char const* format, ...) {
+    // TinyUSB logs device-side GET_REPORT for every read of this buffer.
+    // Keep only logs emitted while tuh_task() is running; preserve
+    // explicit startup diagnostics outside the host task.
+    if (!capture_host_logs && strncmp(format, "[USB-DIAG]", 10) != 0) return 0;
     char line[256];
     va_list args;
     va_start(args, format);
