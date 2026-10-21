@@ -74,6 +74,10 @@ target_link_libraries(remapper
     usb_midi_host
 )
 
+# USB-C stays dedicated to HID Remapper; diagnostics use the board's UART pins.
+pico_enable_stdio_uart(remapper 1)
+pico_enable_stdio_usb(remapper 0)
+
 pico_set_binary_type(remapper copy_to_ram)
 if(PICO_PLATFORM STREQUAL "rp2040")
     pico_set_linker_script(remapper ${CMAKE_CURRENT_LIST_DIR}/remapper_single.ld)

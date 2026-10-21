@@ -23,6 +23,8 @@ void extra_init() {
     pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
     pio_cfg.pin_dp = PICO_DEFAULT_PIO_USB_DP_PIN;
     pio_cfg.skip_alarm_pool = true;
+    printf("[USB-DIAG] PIO host rhport=%u D+ GPIO=%u\r\n",
+           (unsigned) BOARD_TUH_RHPORT, (unsigned) pio_cfg.pin_dp);
     tuh_configure(BOARD_TUH_RHPORT, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
     add_repeating_timer_us(-1000, manual_sof, NULL, &sof_timer);
 }
@@ -62,7 +64,6 @@ void descriptor_received_callback(uint16_t vendor_id, uint16_t product_id, const
 }
 
 void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_report, uint16_t desc_len) {
-    printf("tuh_hid_mount_cb\n");
 
     uint8_t hub_addr;
     uint8_t hub_port;
@@ -71,6 +72,9 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
     uint16_t vid;
     uint16_t pid;
     tuh_vid_pid_get(dev_addr, &vid, &pid);
+    printf("[USB-DIAG] HID mount addr=%u instance=%u parent_hub=%u port=%u vid=%04x pid=%04x descriptor_len=%u\r\n",
+           (unsigned) dev_addr, (unsigned) instance, (unsigned) hub_addr,
+           (unsigned) hub_port, (unsigned) vid, (unsigned) pid, (unsigned) desc_len);
 
     tuh_itf_info_t itf_info;
     tuh_hid_itf_get_info(dev_addr, instance, &itf_info);
@@ -86,7 +90,8 @@ void umount_callback(uint8_t dev_addr, uint8_t instance) {
 }
 
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance) {
-    printf("tuh_hid_umount_cb\n");
+    printf("[USB-DIAG] HID unmount addr=%u instance=%u\r\n",
+           (unsigned) dev_addr, (unsigned) instance);
     umount_callback(dev_addr, instance);
 }
 

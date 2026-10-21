@@ -252,9 +252,13 @@ int main() {
     parse_our_descriptor();
     set_mapping_from_config();
     board_init();
-    extra_init();
-    tusb_init();
+    // Configure UART before the PIO USB host begins enumeration.
     stdio_init_all();
+    printf("\r\n[USB-DIAG] Boot: UART ready (921600 8N1)\r\n");
+    extra_init();
+    printf("[USB-DIAG] PIO USB configured; initializing TinyUSB\r\n");
+    tusb_init();
+    printf("[USB-DIAG] TinyUSB initialized; entering main loop\r\n");
 
     tud_sof_isr_set(sof_handler);
 
