@@ -1,0 +1,102 @@
+diff --git a/src/host/hub.c b/src/host/hub.c
+--- a/src/host/hub.c
++++ b/src/host/hub.c
+@@ -460,6 +460,20 @@
+   hub_interface_t* p_hub = get_itf(daddr);
+   uint8_t const port_num = (uint8_t) tu_le16toh(xfer->setup->wIndex);
+ 
++  // Verify that CLEAR_FEATURE(C_CONNECTION) really cleared the flag before
++  // resetting the link. Check port 4 on both the working and failing hubs.
++  // user_data=1 marks the completion of this one extra GET_STATUS request.
++  if (port_num == 4 && xfer->user_data == 0) {
++    TU_ASSERT(hub_port_get_status(daddr, port_num, &p_hub->port_status,
++                                  connection_clear_conn_change_complete, 1), );
++    return;
++  }
++  if (port_num == 4 && xfer->user_data == 1) {
++    TU_LOG1("HUBFLAG post-connection-clear hub=%u port=%u status=%04x change=%04x\r\n",
++            daddr, port_num, p_hub->port_status.status.value,
++            p_hub->port_status.change.value);
++  }
++
+   if ( p_hub->port_status.status.connection )
+   {
+     // Reset port if attach event
+diff --git a/src/host/usbh.c b/src/host/usbh.c
+--- a/src/host/usbh.c
++++ b/src/host/usbh.c
+@@ -1309,6 +1309,10 @@
+   ENUM_HUB_CLEAR_RESET_1,
+   ENUM_HUB_TRACE_STATUS_2,
+   ENUM_HUB_TRACE_STATUS_3,
++  ENUM_HUB_TRACE_RESET_CLEARED,
++  ENUM_HUB_TRACE_RESET_READBACK,
++  ENUM_HUB_TRACE_CONNECTION_CLEARED,
++  ENUM_HUB_TRACE_CONNECTION_READBACK,
+   ENUM_ADDR0_DEVICE_DESC,
+   ENUM_RESET_2,         // 2nd reset before set address (not used)
+   ENUM_HUB_GET_STATUS_2,
+@@ -1395,7 +1399,19 @@
+         } else {
+           TU_LOG1("HUBTRACE port-never-enabled hub=%u port=%u\r\n",
+                   _dev0.hub_addr, _dev0.hub_port);
+-          enum_full_complete();
++          // The earlier trace aborted with C_RESET and C_CONNECTION still set,
++          // causing repeated hub-interrupt handling. Acknowledge those flags
++          // and read back their state before rearming the interrupt endpoint.
++          if (port_status.change.reset) {
++            TU_ASSERT(hub_port_clear_reset_change(_dev0.hub_addr, _dev0.hub_port,
++                                                  process_enumeration, ENUM_HUB_TRACE_RESET_CLEARED), );
++          } else if (port_status.change.connection) {
++            TU_ASSERT(hub_port_clear_feature(_dev0.hub_addr, _dev0.hub_port,
++                                             HUB_FEATURE_PORT_CONNECTION_CHANGE,
++                                             process_enumeration, ENUM_HUB_TRACE_CONNECTION_CLEARED), );
++          } else {
++            enum_full_complete();
++          }
+         }
+         break;
+       }
+@@ -1415,6 +1431,42 @@
+       break;
+     }
+ 
++    case ENUM_HUB_TRACE_RESET_CLEARED:
++      TU_ASSERT(hub_port_get_status(_dev0.hub_addr, _dev0.hub_port, _usbh_ctrl_buf,
++                                    process_enumeration, ENUM_HUB_TRACE_RESET_READBACK), );
++      break;
++
++    case ENUM_HUB_TRACE_RESET_READBACK: {
++      hub_port_status_response_t port_status;
++      memcpy(&port_status, _usbh_ctrl_buf, sizeof(port_status));
++      TU_LOG1("HUBFLAG post-reset-clear hub=%u port=%u status=%04x change=%04x\r\n",
++              _dev0.hub_addr, _dev0.hub_port, port_status.status.value,
++              port_status.change.value);
++      if (port_status.change.connection) {
++        TU_ASSERT(hub_port_clear_feature(_dev0.hub_addr, _dev0.hub_port,
++                                         HUB_FEATURE_PORT_CONNECTION_CHANGE,
++                                         process_enumeration, ENUM_HUB_TRACE_CONNECTION_CLEARED), );
++      } else {
++        enum_full_complete();
++      }
++      break;
++    }
++
++    case ENUM_HUB_TRACE_CONNECTION_CLEARED:
++      TU_ASSERT(hub_port_get_status(_dev0.hub_addr, _dev0.hub_port, _usbh_ctrl_buf,
++                                    process_enumeration, ENUM_HUB_TRACE_CONNECTION_READBACK), );
++      break;
++
++    case ENUM_HUB_TRACE_CONNECTION_READBACK: {
++      hub_port_status_response_t port_status;
++      memcpy(&port_status, _usbh_ctrl_buf, sizeof(port_status));
++      TU_LOG1("HUBFLAG post-final-connection-clear hub=%u port=%u status=%04x change=%04x\r\n",
++              _dev0.hub_addr, _dev0.hub_port, port_status.status.value,
++              port_status.change.value);
++      enum_full_complete();
++      break;
++    }
++
+     case ENUM_HUB_GET_STATUS_2:
+       osal_task_delay(ENUM_RESET_DELAY);
+       TU_ASSERT(hub_port_get_status(_dev0.hub_addr, _dev0.hub_port, _usbh_ctrl_buf,
