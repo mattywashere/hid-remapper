@@ -2,7 +2,7 @@
 #define _TUSB_CONFIG_H_
 
 // Temporary enumeration diagnostics. Remove for a production firmware build.
-#define CFG_TUSB_DEBUG 2
+#define CFG_TUSB_DEBUG 1
 #define CFG_TUSB_DEBUG_PRINTF feather_diag_printf
 
 #define CFG_TUSB_RHPORT0_MODE (OPT_MODE_DEVICE | OPT_MODE_FULL_SPEED)
